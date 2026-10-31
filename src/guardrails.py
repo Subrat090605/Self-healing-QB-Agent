@@ -11,7 +11,7 @@ import re
 import sqlite3
 from typing import Any, Optional
 
-from src import db
+from src import db, stats
 from src.config import DB_PATH, MAX_STEPS, MAX_SOLVER_CALLS
 
 ALLOWED_TOOLS = {
@@ -82,7 +82,7 @@ def check_submission(
         )
 
     # 2. Enforce Two-Signal Rule
-    # Extract stats signals from evidence
+    # Extract stats signals from evidence or query DB if omitted
     stats_data = evidence.get("stats", {})
     if not isinstance(stats_data, dict):
         stats_data = {}
@@ -103,6 +103,29 @@ def check_submission(
         )
     )
 
+    close_conn = False
+    if conn is None:
+        conn = db.get_conn(DB_PATH)
+        close_conn = True
+
+    try:
+        row = conn.execute("SELECT key FROM questions WHERE id=?", (question_id,)).fetchone()
+        stored_key_db = row["key"] if row else None
+        if not stats_data:
+            df = stats.compute_item_stats(conn=conn, question_ids=[question_id])
+            if not df.empty:
+                r = df.iloc[0]
+                has_stats_signal = bool(
+                    r.get("stats_signal")
+                    or r.get("neg_disc")
+                    or r.get("key_inversion")
+                    or r.get("split_top")
+                    or (r.get("low_disc") and not r.get("ceiling") and not r.get("floor"))
+                )
+    finally:
+        if close_conn:
+            conn.close()
+
     # Extract solver signals from evidence
     solver_data = evidence.get("solver", {})
     if not isinstance(solver_data, dict):
@@ -112,7 +135,7 @@ def check_submission(
         solver_data.get("agreement", evidence.get("agreement", 1.0))
     )
     solver_majority = solver_data.get("majority_answer", evidence.get("majority_answer"))
-    stored_key = evidence.get("stored_key", stats_data.get("key"))
+    stored_key = evidence.get("stored_key", stats_data.get("key")) or stored_key_db
 
     solver_disagreed = (
         (solver_majority is not None and stored_key is not None and solver_majority != stored_key)

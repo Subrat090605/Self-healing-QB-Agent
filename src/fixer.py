@@ -188,7 +188,6 @@ def verify_fix(
             "runs_agreed": runs_agree,
             "total_runs": total_runs,
             "has_ambiguity": has_ambiguity,
-            "solver_result": solver_res,
         }
 
     finally:

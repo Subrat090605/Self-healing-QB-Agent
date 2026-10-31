@@ -156,7 +156,7 @@ def solve(
             can_cache = False
         elif question_id:
             row = conn.execute(
-                "SELECT stem, options_json, version FROM questions WHERE id=? AND status='live'",
+                "SELECT stem, options_json, version, key FROM questions WHERE id=? AND status='live'",
                 (question_id,),
             ).fetchone()
             if not row:
@@ -164,9 +164,13 @@ def solve(
             stem = row["stem"]
             options = json.loads(row["options_json"])
             version = int(row["version"])
+            stored_key = row["key"]
             can_cache = True
         else:
             raise ValueError("Either question_id or question_data must be provided.")
+
+        if question_data:
+            stored_key = question_data.get("key", stored_key)
 
         runs: list[dict[str, Any]] = []
 
@@ -192,13 +196,7 @@ def solve(
                     "used_code": int(r["used_code"]),
                 })
 
-        # 3. Determine how many new runs are needed
-        # We need at least 2 runs. A 3rd run happens only if first 2 disagree or n_runs >= 3.
-        while len(runs) < 2:
-            idx = len(runs)
-            res = _run_single_solve(stem, options, use_code=use_code, model=model)
-            res["run_idx"] = idx
-            runs.append(res)
+        def _save_cache(idx: int, res_item: dict[str, Any]) -> None:
             if can_cache and question_id:
                 conn.execute(
                     """
@@ -210,41 +208,42 @@ def solve(
                         question_id,
                         version,
                         idx,
-                        res["answer"],
-                        json.dumps(res["defensible_options"]),
-                        res["confidence"],
-                        res["reasoning"],
-                        res["used_code"],
+                        res_item["answer"],
+                        json.dumps(res_item["defensible_options"]),
+                        res_item["confidence"],
+                        res_item["reasoning"],
+                        res_item["used_code"],
                     ),
                 )
                 conn.commit()
 
-        # Check if 3rd run is needed
-        need_third = (runs[0]["answer"] != runs[1]["answer"]) or (n_runs >= 3)
+        # 3. Solver: run 1 call first; run 2nd only if answer disagrees with key or lists multiple defensible options
+        if len(runs) == 0:
+            res = _run_single_solve(stem, options, use_code=use_code, model=model)
+            res["run_idx"] = 0
+            runs.append(res)
+            _save_cache(0, res)
+
+        run1 = runs[0]
+        disagreed_key = (stored_key is not None and run1["answer"] != stored_key)
+        multi_def = len(run1.get("defensible_options", [])) > 1
+        need_second = (n_runs >= 2 and (disagreed_key or multi_def))
+
+        if need_second and len(runs) < 2:
+            idx = len(runs)
+            res = _run_single_solve(stem, options, use_code=use_code, model=model)
+            res["run_idx"] = idx
+            runs.append(res)
+            _save_cache(idx, res)
+
+        # 3rd run happens only if first two disagree
+        need_third = (len(runs) >= 2 and runs[0]["answer"] != runs[1]["answer"])
         if need_third and len(runs) < 3:
             idx = len(runs)
             res = _run_single_solve(stem, options, use_code=use_code, model=model)
             res["run_idx"] = idx
             runs.append(res)
-            if can_cache and question_id:
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO solver_runs
-                    (question_id, version, run_idx, answer, defensible_json, confidence, reasoning, used_code)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        question_id,
-                        version,
-                        idx,
-                        res["answer"],
-                        json.dumps(res["defensible_options"]),
-                        res["confidence"],
-                        res["reasoning"],
-                        res["used_code"],
-                    ),
-                )
-                conn.commit()
+            _save_cache(idx, res)
 
         # 4. Aggregate results
         answers = [r["answer"] for r in runs]

@@ -110,7 +110,23 @@ def execute(name: str, args: dict[str, Any], ctx: Optional[dict[str, Any]] = Non
         elif name == "solve_independently":
             qid, n_runs = args["question_id"], int(args.get("n_runs", 2))
             res = solver.solve(qid, n_runs=n_runs, use_code=bool(args.get("use_code", False)), conn=conn)
-            result_str = json.dumps(res, indent=2)
+            compact_res = {
+                "question_id": res.get("question_id"),
+                "majority_answer": res.get("majority_answer"),
+                "agreement": res.get("agreement"),
+                "any_multi_defensible": res.get("any_multi_defensible"),
+                "mean_confidence": res.get("mean_confidence"),
+                "runs": [
+                    {
+                        "answer": r.get("answer"),
+                        "confidence": r.get("confidence"),
+                        "defensible_options": r.get("defensible_options", []),
+                        "reasoning": (r.get("reasoning", "")[:100] + "...") if len(r.get("reasoning", "")) > 100 else r.get("reasoning", ""),
+                    }
+                    for r in res.get("runs", [])
+                ],
+            }
+            result_str = json.dumps(compact_res, indent=2)
         elif name == "run_python":
             result_str = sandbox.run_python(args["code"])
         elif name == "propose_fix":
