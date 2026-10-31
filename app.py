@@ -138,19 +138,36 @@ with tab_health:
         cat_map = {r["id"]: r["category"] for r in q_rows}
         df_stats["category"] = df_stats["question_id"].map(cat_map).fillna("quant")
 
-        # Color-coded status based on session findings
-        def _get_status(qid):
-            if qid in st.session_state.submitted_ids:
-                return "Submitted to Review"
-            if qid in st.session_state.cleared_ids:
-                return "Cleared Decoy"
-            if qid in st.session_state.refused_ids:
-                return "Refused (Low N)"
-            if qid in st.session_state.watchlist_ids:
-                return "Watchlist"
-            return "Live / Healthy"
+        # Color-coded decision based on the latest run's findings table
+        latest_finding = conn.execute(
+            "SELECT run_id FROM findings WHERE run_id NOT LIKE 'run_unit%' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        latest_run_id = latest_finding["run_id"] if latest_finding else None
 
-        df_stats["status"] = df_stats["question_id"].apply(_get_status)
+        decision_map = {}
+        if latest_run_id:
+            f_rows = conn.execute(
+                "SELECT question_id, status FROM findings WHERE run_id = ?",
+                (latest_run_id,),
+            ).fetchall()
+            for r in f_rows:
+                st_val = r["status"]
+                if st_val == "submitted":
+                    decision_map[r["question_id"]] = "submitted for review"
+                elif st_val == "cleared":
+                    decision_map[r["question_id"]] = "cleared decoy"
+                elif st_val == "refused":
+                    decision_map[r["question_id"]] = "refused (insufficient data)"
+
+        # Overlay any decisions from the active session run
+        for qid in st.session_state.submitted_ids:
+            decision_map[qid] = "submitted for review"
+        for qid in st.session_state.cleared_ids:
+            decision_map[qid] = "cleared decoy"
+        for qid in st.session_state.refused_ids:
+            decision_map[qid] = "refused (insufficient data)"
+
+        df_stats["decision"] = df_stats["question_id"].map(decision_map).fillna("others")
 
         # Metrics overview
         m1, m2, m3, m4 = st.columns(4)
@@ -164,26 +181,28 @@ with tab_health:
             df_stats,
             x="p",
             y="D",
-            color="status",
-            hover_data=["question_id", "key", "n", "r_pb", "category"],
+            color="decision",
+            hover_data={"question_id": True, "n": True, "p": True, "D": True},
             color_discrete_map={
-                "Submitted to Review": "#d32f2f",
-                "Cleared Decoy": "#388e3c",
-                "Refused (Low N)": "#7b1fa2",
-                "Watchlist": "#f57c00",
-                "Live / Healthy": "#1976d2",
+                "submitted for review": "red",
+                "cleared decoy": "green",
+                "refused (insufficient data)": "grey",
+                "others": "blue",
+            },
+            category_orders={
+                "decision": ["submitted for review", "cleared decoy", "refused (insufficient data)", "others"]
             },
             title="Item Difficulty (p) vs Discrimination (D)",
-            labels={"p": "Difficulty Index (p)", "D": "Discrimination Index (D)"},
+            labels={"p": "Difficulty Index (p)", "D": "Discrimination Index (D)", "decision": "Decision"},
         )
         fig.add_hline(y=0.20, line_dash="dash", line_color="gray", annotation_text="D = 0.20 cutoff")
         fig.add_hline(y=0.0, line_dash="dot", line_color="red", annotation_text="D = 0 (inversion)")
-        fig.update_layout(height=450, margin=dict(l=20, r=20, t=40, b=20))
+        fig.update_layout(height=450, margin=dict(l=20, r=20, t=40, b=20), showlegend=True)
         st.plotly_chart(fig, use_container_width=True)
 
         # Full Table
         st.subheader("All Questions Data")
-        show_cols = ["question_id", "category", "key", "n", "p", "D", "r_pb", "stats_signal", "status"]
+        show_cols = ["question_id", "category", "key", "n", "p", "D", "r_pb", "stats_signal", "decision"]
         st.dataframe(df_stats[show_cols], use_container_width=True)
 
     finally:
