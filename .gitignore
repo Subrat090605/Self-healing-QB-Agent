@@ -1,0 +1,7 @@
+.env
+data/qbank.db
+data/ground_truth.json
+reports/
+__pycache__/
+*.pyc
+.pytest_cache/
