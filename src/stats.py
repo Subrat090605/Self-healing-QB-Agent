@@ -213,6 +213,13 @@ def analyze_distractors(
     return {
         "question_id": question_id, "key": live_key, "n": n, "p": p, "D": D, "r_pb": r_pb,
         "share_all": sa, "share_upper": su, "share_lower": sl, "anomaly": anomaly,
+        "stats_signal": bool(row["stats_signal"]),
+        "neg_disc": bool(row["neg_disc"]),
+        "low_disc": bool(row["low_disc"]),
+        "key_inversion": bool(row["key_inversion"]),
+        "split_top": bool(row["split_top"]),
+        "ceiling": bool(row["ceiling"]),
+        "floor": bool(row["floor"]),
     }
 
 

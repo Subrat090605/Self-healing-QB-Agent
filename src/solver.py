@@ -148,11 +148,13 @@ def solve(
 
     try:
         # 1. Resolve stem and options
+        stored_key = None
         if question_data:
             stem = question_data["stem"]
             options = question_data["options"]
             if isinstance(options, str):
                 options = json.loads(options)
+            stored_key = question_data.get("key")
             can_cache = False
         elif question_id:
             row = conn.execute(
@@ -168,9 +170,6 @@ def solve(
             can_cache = True
         else:
             raise ValueError("Either question_id or question_data must be provided.")
-
-        if question_data:
-            stored_key = question_data.get("key", stored_key)
 
         runs: list[dict[str, Any]] = []
 

@@ -143,7 +143,18 @@ def _run_scripted(
 
         # Check if already healed or pending
         if memory.is_question_healed(qid, conn=conn):
+            step += 1
+            yield _emit_event(run_id, step, "PLAN", {"plan": f"Question {qid} is already healed with an approved fix. Skipping."})
             continue
+
+        # Check if previous fix was rejected in memory
+        mem_info = memory.recall(question_id=qid, conn=conn)
+        rejected_types = mem_info.get("rejected_fix_types", [])
+        if rejected_types:
+            step += 1
+            yield _emit_event(run_id, step, "REPLAN", {
+                "plan": f"REPLAN: Question {qid} had previous fix rejected ({rejected_types}). Adapting approach to avoid rejected fix type.",
+            })
 
         step += 1
         dist_raw = tools.execute("analyze_distractors", {"question_id": qid}, {"run_id": run_id, "step": step, "conn": conn})
