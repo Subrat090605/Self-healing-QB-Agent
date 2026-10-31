@@ -131,7 +131,7 @@ def simulate_student_attempts(
                     weights = []
                     for d in distractors:
                         if d == tempting:
-                            weights.append(2.0 + max(0.0, -1.0 * theta))
+                            weights.append(1.4 + max(0.0, -1.0 * theta))
                         else:
                             weights.append(1.0)
                     total_w = sum(weights)

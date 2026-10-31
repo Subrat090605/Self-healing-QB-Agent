@@ -443,8 +443,8 @@ def get_all_questions() -> list[dict[str, Any]]:
         "true_correct": "B",
         "alternate_valid": None,
         "label": "decoy_hard",
-        "irt_a": 1.6,
-        "irt_b": 1.7,
+        "irt_a": 1.8,
+        "irt_b": 1.4,
         "irt_c": 0.2,
         "tempting_distractor": "A",
     })
@@ -838,8 +838,8 @@ def get_all_questions() -> list[dict[str, Any]]:
         "true_correct": "B",
         "alternate_valid": None,
         "label": "decoy_hard",
-        "irt_a": 1.6,
-        "irt_b": 1.7,
+        "irt_a": 1.8,
+        "irt_b": 1.4,
         "irt_c": 0.2,
         "tempting_distractor": "A",
     })
