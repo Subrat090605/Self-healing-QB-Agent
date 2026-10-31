@@ -130,7 +130,10 @@ def _run_scripted(
             pass
 
     with ThreadPoolExecutor(max_workers=4) as executor:
-        list(executor.map(_warm_solve, suspects))
+        try:
+            list(executor.map(_warm_solve, suspects, timeout=45))
+        except Exception:
+            pass
 
     # Step 4: Investigate each suspect
     for qid in suspects:

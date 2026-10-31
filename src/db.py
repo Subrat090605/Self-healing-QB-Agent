@@ -104,9 +104,10 @@ CREATE INDEX IF NOT EXISTS idx_rqueue_status  ON review_queue (status);
 
 def get_conn(path: Path = DB_PATH) -> sqlite3.Connection:
     """Return a sqlite3 connection with row_factory and WAL mode enabled."""
-    conn = sqlite3.connect(str(path), check_same_thread=False)
+    conn = sqlite3.connect(str(path), timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 

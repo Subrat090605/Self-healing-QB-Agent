@@ -5,6 +5,7 @@ See SPEC §3b and CLAUDE.md for constraints.
 """
 
 import json
+import os
 import random
 import threading
 import time
@@ -61,7 +62,7 @@ usage = _Usage()
 class _RateLimiter:
     """Sliding-window rate limiter: max RPM requests per minute."""
 
-    def __init__(self, rpm: int = 25, tpm: int = 10_000) -> None:
+    def __init__(self, rpm: int = 25, tpm: int = 60_000) -> None:
         self._rpm = rpm
         self._tpm = tpm
         self._lock = threading.Lock()
@@ -95,13 +96,11 @@ class _RateLimiter:
     def record_tokens(self, actual_tokens: int, estimated_tokens: int = 500) -> None:
         """Correct the estimate with actual token count."""
         with self._lock:
-            # Replace the last estimate entry with the actual value
-            if self._token_times:
-                ts, _ = self._token_times.pop()
-                self._token_times.append((ts, actual_tokens))
+            if actual_tokens > estimated_tokens:
+                self._token_times.append((time.time(), actual_tokens - estimated_tokens))
 
 
-_limiter = _RateLimiter(rpm=25, tpm=10_000)
+_limiter = _RateLimiter(rpm=25, tpm=int(os.getenv("GROQ_TPM", "60000")))
 
 
 # -- Chaos mode -----------------------------------------------------------------

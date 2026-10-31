@@ -239,11 +239,19 @@ with tab_run:
     wat_count = len(st.session_state.watchlist_ids)
 
     with col_stats:
-        t1, t2, t3, t4 = st.columns(4)
-        t1.metric("Submitted", sub_count)
-        t2.metric("Cleared Decoys", clr_count)
-        t3.metric("Refused (Low N)", ref_count)
-        t4.metric("Watchlist", wat_count)
+        t1_col, t2_col, t3_col, t4_col = st.columns(4)
+        m1 = t1_col.empty()
+        m2 = t2_col.empty()
+        m3 = t3_col.empty()
+        m4 = t4_col.empty()
+
+        def _update_metrics():
+            m1.metric("Submitted", len(st.session_state.submitted_ids))
+            m2.metric("Cleared Decoys", len(st.session_state.cleared_ids))
+            m3.metric("Refused (Low N)", len(st.session_state.refused_ids))
+            m4.metric("Watchlist", len(st.session_state.watchlist_ids))
+
+        _update_metrics()
 
     st.divider()
 
@@ -311,8 +319,8 @@ with tab_run:
         st.session_state.cleared_ids = set()
         st.session_state.refused_ids = set()
         st.session_state.watchlist_ids = set()
+        _update_metrics()
 
-        progress_text = st.empty()
         with event_container:
             for ev in agent.run(seed=int(seed_input), mode=engine_mode):
                 st.session_state.trace_events.append(ev)
@@ -324,14 +332,17 @@ with tab_run:
                     qid = payload.get("args", {}).get("question_id")
                     if qid:
                         st.session_state.submitted_ids.add(qid)
+                        _update_metrics()
                 elif etype == "ACT" and payload.get("tool") == "record_clearance":
                     qid = payload.get("args", {}).get("question_id")
                     if qid:
                         st.session_state.cleared_ids.add(qid)
+                        _update_metrics()
                 elif etype == "REFUSAL":
                     qid = payload.get("question_id")
                     if qid:
                         st.session_state.refused_ids.add(qid)
+                        _update_metrics()
                 elif etype == "RESULT":
                     st.session_state.latest_summary = payload
                     for q in payload.get("submitted", []):
@@ -342,11 +353,11 @@ with tab_run:
                         st.session_state.refused_ids.add(q)
                     for q in payload.get("watchlist", []):
                         st.session_state.watchlist_ids.add(q)
+                    _update_metrics()
 
                 _render_event(ev)
 
-        st.success("Investigation complete!")
-        st.rerun()
+            st.success("Investigation complete!")
 
     elif not replay_mode and st.session_state.trace_events:
         with event_container:

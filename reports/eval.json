@@ -1,43 +1,46 @@
 {
-  "timestamp": "2026-10-31T07:13:32Z",
+  "timestamp": "2026-10-31T08:16:53Z",
   "seeds": [
-    0
+    0,
+    1,
+    2
   ],
   "mode": "scripted",
   "summary": {
-    "agent_mean_score": 4.0,
-    "agent_mean_caught": 4.0,
+    "agent_mean_score": 1.67,
+    "agent_mean_caught": 1.67,
     "agent_mean_fp": 0.0,
-    "agent_mean_f1": 0.8889,
-    "agent_mean_verdict_accuracy": 1.0,
-    "agent_mean_verify_pass_rate": 1.0,
-    "baseline_mean_score": -1.0,
+    "agent_mean_f1": 0.3333,
+    "agent_mean_verdict_accuracy": 0.2667,
+    "agent_mean_verify_pass_rate": 0.2,
+    "baseline_mean_score": -0.67,
     "baseline_mean_fp": 5.0,
-    "score_advantage": 5.0,
-    "mean_runtime_s": 194.15,
-    "mean_llm_calls": 15.0
+    "score_advantage": 2.33,
+    "mean_runtime_s": 326.91,
+    "mean_llm_calls": 9.3
   },
   "per_seed": [
     {
       "seed": 0,
-      "runtime_s": 194.15,
-      "llm_calls": 15,
-      "llm_tokens": 8942,
+      "runtime_s": 137.49,
+      "llm_calls": 19,
+      "llm_tokens": 10941,
       "agent": {
         "flagged": [
           "Q005",
+          "Q012",
           "Q038",
           "Q042",
           "Q045"
         ],
-        "caught": 4,
+        "caught": 5,
         "fp": 0,
-        "score": 4,
+        "score": 5,
         "precision": 1.0,
-        "recall": 0.8,
-        "f1": 0.8889,
-        "verdict_accuracy": 1.0,
-        "verify_pass_rate": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "verdict_accuracy": 0.8,
+        "verify_pass_rate": 0.6,
         "decoys_cleared": "4/4",
         "lowN_refused": "[PASS]"
       },
@@ -48,6 +51,85 @@
           "Q030",
           "Q038",
           "Q042",
+          "Q045",
+          "Q047",
+          "Q050",
+          "Q053"
+        ],
+        "caught": 4,
+        "fp": 5,
+        "score": -1,
+        "precision": 0.4444,
+        "recall": 0.8,
+        "f1": 0.5714,
+        "decoys_flagged": 4
+      }
+    },
+    {
+      "seed": 1,
+      "runtime_s": 213.32,
+      "llm_calls": 5,
+      "llm_tokens": 2240,
+      "agent": {
+        "flagged": [],
+        "caught": 0,
+        "fp": 0,
+        "score": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "verdict_accuracy": 0.0,
+        "verify_pass_rate": 0.0,
+        "decoys_cleared": "4/4",
+        "lowN_refused": "[PASS]"
+      },
+      "baseline": {
+        "flagged": [
+          "Q005",
+          "Q012",
+          "Q025",
+          "Q030",
+          "Q038",
+          "Q042",
+          "Q045",
+          "Q047",
+          "Q050",
+          "Q053"
+        ],
+        "caught": 5,
+        "fp": 5,
+        "score": 0,
+        "precision": 0.5,
+        "recall": 1.0,
+        "f1": 0.6667,
+        "decoys_flagged": 4
+      }
+    },
+    {
+      "seed": 2,
+      "runtime_s": 629.91,
+      "llm_calls": 4,
+      "llm_tokens": 2224,
+      "agent": {
+        "flagged": [],
+        "caught": 0,
+        "fp": 0,
+        "score": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "verdict_accuracy": 0.0,
+        "verify_pass_rate": 0.0,
+        "decoys_cleared": "4/4",
+        "lowN_refused": "[PASS]"
+      },
+      "baseline": {
+        "flagged": [
+          "Q005",
+          "Q012",
+          "Q025",
+          "Q030",
+          "Q038",
           "Q045",
           "Q047",
           "Q050",
