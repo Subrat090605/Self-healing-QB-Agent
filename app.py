@@ -10,6 +10,7 @@ Implements SPEC §15:
 """
 
 import json
+import os
 import sqlite3
 import time
 from typing import Any, Optional
@@ -447,81 +448,160 @@ with tab_review:
 # TAB 4: Scoreboard
 # ==============================================================================
 with tab_score:
-    st.header("Evaluation Scoreboard")
-    st.markdown("Ground truth comparison and agent vs baseline benchmark.")
+    st.header("Evaluation Scoreboard & Benchmark (SPEC §14)")
+    st.markdown("Ground truth comparison, reliability score ($Caught - FP$), and Agent vs Naive Baseline.")
 
-    col_eval_btn, col_eval_disp = st.columns([1, 4])
-    with col_eval_btn:
-        run_eval_btn = st.button("Evaluate Seed 0", use_container_width=True)
-
-    # Ground truth reveal
-    with st.expander("🔍 Reveal Ground Truth (Evaluator View)"):
-        st.write("Reads `data/ground_truth.json` for benchmarking purposes only.")
+    # 1. Load Evaluation Report
+    eval_report = None
+    if os.path.exists("reports/eval.json"):
         try:
-            with open("data/ground_truth.json", "r") as f:
+            with open("reports/eval.json", "r", encoding="utf-8") as f:
+                eval_report = json.load(f)
+        except Exception:
+            eval_report = None
+
+    if eval_report:
+        summary = eval_report.get("summary", {})
+        seeds_list = eval_report.get("seeds", [])
+        timestamp = eval_report.get("timestamp", "N/A")
+        solver_bench = eval_report.get("solver_benchmark", {})
+
+        st.caption(f"Last Evaluation: `{timestamp}` | Seeds: `{seeds_list}` | Mode: `{eval_report.get('mode', 'scripted')}`")
+
+        # Top summary metrics
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric(
+            "Agent Mean Score",
+            f"{summary.get('agent_mean_score', 0):+0.2f}",
+            delta=f"{summary.get('score_advantage', 0):+0.2f} vs Naive",
+        )
+        m2.metric(
+            "Planted Caught",
+            f"{summary.get('agent_mean_caught', 0):.1f}/5",
+            delta=f"F1: {summary.get('agent_mean_f1', 0):.3f}",
+        )
+        m3.metric(
+            "False Positives",
+            f"{summary.get('agent_mean_fp', 0):.1f}",
+            delta=f"-{summary.get('baseline_mean_fp', 0):.1f} vs Naive",
+            delta_color="inverse",
+        )
+        m4.metric(
+            "Solver Clean Accuracy",
+            f"{solver_bench.get('accuracy', 0):.1%}",
+            delta=f"{solver_bench.get('correct_count', 0)}/{solver_bench.get('total_clean', 0)} items",
+        )
+
+        st.divider()
+
+        # Side-by-Side Comparison Chart
+        st.subheader("Agent vs Naive Baseline Comparison")
+        chart_rows = []
+        for r in eval_report.get("per_seed", []):
+            sd = r["seed"]
+            chart_rows.append({"Seed": f"Seed {sd}", "System": "Agent (Two-Signal)", "Reliability Score": r["agent"]["score"], "Planted Caught": r["agent"]["caught"], "False Positives": r["agent"]["fp"]})
+            chart_rows.append({"Seed": f"Seed {sd}", "System": "Naive Baseline", "Reliability Score": r["baseline"]["score"], "Planted Caught": r["baseline"]["caught"], "False Positives": r["baseline"]["fp"]})
+
+        # Add Average if multiple seeds
+        if len(eval_report.get("per_seed", [])) > 1:
+            chart_rows.append({"Seed": "AVERAGE", "System": "Agent (Two-Signal)", "Reliability Score": summary.get("agent_mean_score", 0), "Planted Caught": summary.get("agent_mean_caught", 0), "False Positives": summary.get("agent_mean_fp", 0)})
+            chart_rows.append({"Seed": "AVERAGE", "System": "Naive Baseline", "Reliability Score": summary.get("baseline_mean_score", 0), "Planted Caught": summary.get("baseline_mean_caught", 0), "False Positives": summary.get("baseline_mean_fp", 0)})
+
+        cdf = pd.DataFrame(chart_rows)
+
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            fig_score = px.bar(
+                cdf,
+                x="Seed",
+                y="Reliability Score",
+                color="System",
+                barmode="group",
+                title="Reliability Score = Caught - FP (Higher is Better)",
+                color_discrete_map={"Agent (Two-Signal)": "#2e7d32", "Naive Baseline": "#c62828"}
+            )
+            fig_score.update_layout(height=320, margin=dict(l=10, r=10, t=35, b=10))
+            st.plotly_chart(fig_score, use_container_width=True)
+
+        with col_c2:
+            fig_fp = px.bar(
+                cdf,
+                x="Seed",
+                y="False Positives",
+                color="System",
+                barmode="group",
+                title="False Positives on Decoys / Benign Items (Lower is Better)",
+                color_discrete_map={"Agent (Two-Signal)": "#2e7d32", "Naive Baseline": "#d32f2f"}
+            )
+            fig_fp.update_layout(height=320, margin=dict(l=10, r=10, t=35, b=10))
+            st.plotly_chart(fig_fp, use_container_width=True)
+
+        # Per-Seed Detailed Table
+        st.subheader("Per-Seed Breakdown")
+        table_rows = []
+        for r in eval_report.get("per_seed", []):
+            ag = r["agent"]
+            bs = r["baseline"]
+            table_rows.append({
+                "Seed": r["seed"],
+                "Agent Score": ag["score"],
+                "Planted Caught": f"{ag['caught']}/5",
+                "Agent FP": ag["fp"],
+                "Precision": f"{ag['precision']:.3f}",
+                "Recall": f"{ag['recall']:.3f}",
+                "F1 Score": f"{ag['f1']:.3f}",
+                "Verdict Accuracy": f"{ag['verdict_accuracy']:.1%}",
+                "Verify Pass Rate": f"{ag['verify_pass_rate']:.1%}",
+                "Decoys Cleared": ag["decoys_cleared"],
+                "Low-N Refused": ag["lowN_refused"],
+                "Baseline Score": bs["score"],
+                "Baseline FP": bs["fp"],
+                "Runtime": f"{r['runtime_s']}s",
+            })
+        st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
+
+    else:
+        st.info("No saved evaluation report found at `reports/eval.json`. Run `python -m src.evaluate --seeds 0 1 2` to generate.")
+
+    # 2. Ground Truth Reveal
+    st.divider()
+    with st.expander("🔍 Reveal Ground Truth (Evaluator Inspector)", expanded=False):
+        st.markdown(
+            "> [!NOTE]\n"
+            "> **Ground-Truth Firewall Notice**: This view is restricted to the Evaluator interface. "
+            "Agent modules are architecturally forbidden from reading or importing `ground_truth.json`."
+        )
+        try:
+            with open("data/ground_truth.json", "r", encoding="utf-8") as f:
                 gt_data = json.load(f)
-            gt_df = pd.DataFrame([
-                {"id": k, "label": v["label"], "true_correct": v["true_correct"]}
-                for k, v in gt_data.items()
-            ])
-            st.dataframe(gt_df, use_container_width=True)
+
+            filter_lbl = st.selectbox(
+                "Filter Questions by Label Category:",
+                options=["All", "Planted Defects Only", "Decoys & Low-N", "Clean Benchmark"],
+                key="gt_filter_sel"
+            )
+
+            gt_rows = []
+            for qid, info in gt_data.items():
+                lbl = info.get("label", "")
+                if filter_lbl == "Planted Defects Only" and "planted" not in lbl:
+                    continue
+                elif filter_lbl == "Decoys & Low-N" and "decoy" not in lbl and "lowN" not in lbl:
+                    continue
+                elif filter_lbl == "Clean Benchmark" and lbl != "clean":
+                    continue
+
+                gt_rows.append({
+                    "Question ID": qid,
+                    "Ground Truth Label": lbl,
+                    "True Correct Key": info.get("true_correct"),
+                    "Alternate Valid": info.get("alternate_valid") or "—",
+                    "Category": info.get("category"),
+                })
+
+            st.dataframe(pd.DataFrame(gt_rows), use_container_width=True, hide_index=True)
         except Exception as exc:
-            st.warning(f"Ground truth not found: {exc}")
-
-    # Load eval report if available
-    try:
-        with open("reports/eval.json", "r") as f:
-            eval_report = json.load(f)
-        st.subheader("Summary Benchmark")
-        st.json(eval_report)
-    except Exception:
-        # Compute live evaluation on seed 0 if requested
-        if run_eval_btn:
-            with st.spinner("Computing evaluation metrics..."):
-                conn = get_db()
-                try:
-                    with open("data/ground_truth.json", "r") as f:
-                        gt = json.load(f)
-                    planted = {k for k, v in gt.items() if "planted" in v["label"]}
-                    decoys = {k for k, v in gt.items() if "decoy" in v["label"]}
-
-                    # Submitted items
-                    sub_rows = conn.execute("SELECT question_id FROM review_queue").fetchall()
-                    flagged = {r["question_id"] for r in sub_rows}
-
-                    caught = len(flagged & planted)
-                    fp = len(flagged - planted)
-                    score = caught - fp
-
-                    st.markdown("### Performance Metrics")
-                    e1, e2, e3 = st.columns(3)
-                    e1.metric("Planted Caught", f"{caught}/5")
-                    e2.metric("False Positives", fp)
-                    e3.metric("Reliability Score", score)
-
-                    # Comparison Chart: Agent vs Naive Baseline
-                    # Compute naive baseline
-                    df_stats = stats.compute_item_stats(conn=conn)
-                    naive_flagged = set(df_stats[df_stats["naive_signal"]]["question_id"])
-                    naive_caught = len(naive_flagged & planted)
-                    naive_fp = len(naive_flagged - planted)
-
-                    chart_df = pd.DataFrame([
-                        {"Method": "Agent (Two-Signal)", "Planted Caught": caught, "False Positives": fp},
-                        {"Method": "Naive (Single-Signal)", "Planted Caught": naive_caught, "False Positives": naive_fp},
-                    ])
-
-                    fig_cmp = px.bar(
-                        chart_df,
-                        x="Method",
-                        y=["Planted Caught", "False Positives"],
-                        barmode="group",
-                        title="Agent vs Naive Baseline Comparison",
-                        color_discrete_map={"Planted Caught": "#2e7d32", "False Positives": "#c62828"}
-                    )
-                    st.plotly_chart(fig_cmp, use_container_width=True)
-                finally:
-                    conn.close()
+            st.warning(f"Could not load ground truth: {exc}")
 
 
 # ==============================================================================

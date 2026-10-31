@@ -1,7 +1,12 @@
 .env
+*.db
+*.db-shm
+*.db-wal
+scratch/
 data/qbank.db
 data/ground_truth.json
-reports/
+reports/*
+!reports/eval.json
 __pycache__/
 *.pyc
 .pytest_cache/

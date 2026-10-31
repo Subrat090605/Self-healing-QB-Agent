@@ -10,6 +10,8 @@ def test_review_approve_and_reject_flow():
     try:
         # Create a mock pending item
         test_qid = "Q_UNIT_REV"
+        conn.execute("DELETE FROM questions WHERE id=?", (test_qid,))
+        conn.execute("DELETE FROM review_queue WHERE question_id=?", (test_qid,))
         conn.execute(
             """
             INSERT OR REPLACE INTO questions (id, version, stem, options_json, key, category, status)

@@ -68,6 +68,7 @@ def _emit_event(
 def _run_scripted(
     run_id: str,
     conn: Any,
+    db_path: Optional[Any] = None,
 ) -> Generator[dict[str, Any], None, dict[str, Any]]:
     """Plain-Python deterministic orchestrator following the SPEC §9.3 matrix (Phase 5b)."""
     from concurrent.futures import ThreadPoolExecutor
@@ -121,7 +122,10 @@ def _run_scripted(
     # Point 4: Run solver calls for different suspects in parallel with ThreadPoolExecutor(max_workers=4)
     def _warm_solve(qid: str) -> None:
         try:
-            solver.solve(qid, n_runs=1)
+            w_conn = db.get_conn(db_path) if db_path else None
+            solver.solve(qid, n_runs=1, conn=w_conn)
+            if w_conn:
+                w_conn.close()
         except Exception:
             pass
 
@@ -492,6 +496,7 @@ def run(
     seed: Optional[Any] = None,
     run_id: Optional[str] = None,
     mode: str = "llm",
+    db_path: Optional[Any] = None,
 ) -> Generator[dict[str, Any], None, dict[str, Any]]:
     """Main generator entry point for running the agent loop.
 
@@ -499,25 +504,26 @@ def run(
         seed: Random seed (int rebuilds DB) or SQLite file path.
         run_id: Unique identifier for this agent run.
         mode: 'llm' (orchestrator per §9) or 'scripted' (fallback per §3b).
+        db_path: Optional path to target SQLite database.
 
     Yields:
         Trace event dictionaries so the UI or CLI can stream progress in real time.
     """
-    db_path = config.DB_PATH
+    target_db = str(db_path) if db_path else config.DB_PATH
     if isinstance(seed, int):
         from src.seed.build import build
-        build(seed=seed)
+        build(seed=seed, db_path=target_db, write_gt=(target_db == str(config.DB_PATH)), quiet=True)
     elif isinstance(seed, str) and seed.endswith(".db"):
-        db_path = seed
+        target_db = seed
 
     run_id = run_id or f"run_{int(time.time())}"
-    conn = db.get_conn(db_path)
+    conn = db.get_conn(target_db)
 
     try:
         if mode == "llm":
             return (yield from _run_llm(run_id, conn))
         else:
-            return (yield from _run_scripted(run_id, conn))
+            return (yield from _run_scripted(run_id, conn, db_path=target_db))
     finally:
         conn.close()
 

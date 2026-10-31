@@ -7,7 +7,7 @@ See SPEC §5.
 import argparse
 import json
 from collections import Counter
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 
@@ -73,18 +73,25 @@ def compute_quick_stats(attempts: list[dict[str, Any]]) -> dict[str, dict[str, f
     return stats
 
 
-def build(seed: int = 0) -> None:
+def build(
+    seed: int = 0,
+    db_path: Optional[Any] = None,
+    write_gt: bool = True,
+    quiet: bool = False,
+) -> None:
     """Build the database and ground truth files for the given seed."""
-    print(f"Building question bank and simulating attempts with seed={seed}...")
+    target_db = db_path if db_path is not None else DB_PATH
+    if not quiet:
+        print(f"Building question bank and simulating attempts with seed={seed} (db={target_db})...")
 
     # 1. Initialize SQLite schema
-    db.init(DB_PATH)
+    db.init(target_db)
 
     # 2. Load questions
     questions = get_all_questions()
 
     # 3. Clear existing questions and attempts
-    conn = db.get_conn(DB_PATH)
+    conn = db.get_conn(target_db)
     with conn:
         conn.execute("DELETE FROM questions")
         conn.execute("DELETE FROM attempts")
@@ -145,49 +152,51 @@ def build(seed: int = 0) -> None:
             },
         }
 
-    with open(GROUND_TRUTH_PATH, "w", encoding="utf-8") as f:
-        json.dump(ground_truth, f, indent=2)
+    if write_gt:
+        with open(GROUND_TRUTH_PATH, "w", encoding="utf-8") as f:
+            json.dump(ground_truth, f, indent=2)
 
-    # 8. Compute quick stats and display check output
-    quick_stats = compute_quick_stats(attempts)
-    label_counts = Counter(q["label"] for q in questions)
+    if not quiet:
+        # 8. Compute quick stats and display check output
+        quick_stats = compute_quick_stats(attempts)
+        label_counts = Counter(q["label"] for q in questions)
 
-    print("\n" + "=" * 60)
-    print("SEED BUILD SUMMARY")
-    print("=" * 60)
-    print(f"Total Questions: {len(questions)}")
-    print(f"Total Attempts : {len(attempts)}")
-    print("\nLabels Breakdown:")
-    for lbl, count in sorted(label_counts.items()):
-        print(f"  - {lbl:<22}: {count}")
+        print("\n" + "=" * 60)
+        print("SEED BUILD SUMMARY")
+        print("=" * 60)
+        print(f"Total Questions: {len(questions)}")
+        print(f"Total Attempts : {len(attempts)}")
+        print("\nLabels Breakdown:")
+        for lbl, count in sorted(label_counts.items()):
+            print(f"  - {lbl:<22}: {count}")
 
-    print("\n" + "-" * 72)
-    print(f"{'ID':<6} {'Label':<22} {'Stored':<7} {'True':<6} {'N':<6} {'p':<8} {'D':<8}")
-    print("-" * 72)
+        print("\n" + "-" * 72)
+        print(f"{'ID':<6} {'Label':<22} {'Stored':<7} {'True':<6} {'N':<6} {'p':<8} {'D':<8}")
+        print("-" * 72)
 
-    # Print planted items
-    planted_labels = {"planted_wrong_key", "planted_ambiguous", "planted_nondisc"}
-    planted_items = [q for q in questions if q["label"] in planted_labels]
-    for q in planted_items:
-        qid = q["id"]
-        st = quick_stats.get(qid, {"n": 0, "p": 0.0, "D": 0.0})
-        print(
-            f"{qid:<6} {q['label']:<22} {q['key']:<7} {q['true_correct']:<6} "
-            f"{int(st['n']):<6} {st['p']:<8.3f} {st['D']:<8.3f}"
-        )
+        # Print planted items
+        planted_labels = {"planted_wrong_key", "planted_ambiguous", "planted_nondisc"}
+        planted_items = [q for q in questions if q["label"] in planted_labels]
+        for q in planted_items:
+            qid = q["id"]
+            st = quick_stats.get(qid, {"n": 0, "p": 0.0, "D": 0.0})
+            print(
+                f"{qid:<6} {q['label']:<22} {q['key']:<7} {q['true_correct']:<6} "
+                f"{int(st['n']):<6} {st['p']:<8.3f} {st['D']:<8.3f}"
+            )
 
-    print("\nDecoys & Low-N Items:")
-    print("-" * 72)
-    decoy_items = [q for q in questions if q["label"] in {"decoy_hard", "decoy_easy", "lowN_valid"}]
-    for q in decoy_items:
-        qid = q["id"]
-        st = quick_stats.get(qid, {"n": 0, "p": 0.0, "D": 0.0})
-        print(
-            f"{qid:<6} {q['label']:<22} {q['key']:<7} {q['true_correct']:<6} "
-            f"{int(st['n']):<6} {st['p']:<8.3f} {st['D']:<8.3f}"
-        )
+        print("\nDecoys & Low-N Items:")
+        print("-" * 72)
+        decoy_items = [q for q in questions if q["label"] in {"decoy_hard", "decoy_easy", "lowN_valid"}]
+        for q in decoy_items:
+            qid = q["id"]
+            st = quick_stats.get(qid, {"n": 0, "p": 0.0, "D": 0.0})
+            print(
+                f"{qid:<6} {q['label']:<22} {q['key']:<7} {q['true_correct']:<6} "
+                f"{int(st['n']):<6} {st['p']:<8.3f} {st['D']:<8.3f}"
+            )
 
-    print("=" * 72 + "\n")
+        print("=" * 72 + "\n")
 
 
 def main() -> None:
